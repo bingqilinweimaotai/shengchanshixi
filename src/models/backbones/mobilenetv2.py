@@ -1,4 +1,4 @@
-""" This file is adapted from https://github.com/thuyngch/Human-Segmentation-PyTorch"""
+""" 此文件改编自 https://github.com/thuyngch/Human-Segmentation-PyTorch"""
 
 import math
 import json
@@ -9,14 +9,14 @@ from torch import nn
 
 
 #------------------------------------------------------------------------------
-#  Useful functions
+#  实用函数
 #------------------------------------------------------------------------------
 
 def _make_divisible(v, divisor, min_value=None):
 	if min_value is None:
 		min_value = divisor
 	new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
-	# Make sure that round down does not go down by more than 10%.
+	# 确保向下取整不会减少超过10%
 	if new_v < 0.9 * v:
 		new_v += divisor
 	return new_v
@@ -39,7 +39,7 @@ def conv_1x1_bn(inp, oup):
 
 
 #------------------------------------------------------------------------------
-#  Class of Inverted Residual block
+#  倒残差块类
 #------------------------------------------------------------------------------
 
 class InvertedResidual(nn.Module):
@@ -53,25 +53,25 @@ class InvertedResidual(nn.Module):
 
 		if expansion == 1:
 			self.conv = nn.Sequential(
-				# dw
+				# 深度卷积
 				nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, dilation=dilation, bias=False),
 				nn.BatchNorm2d(hidden_dim),
 				nn.ReLU6(inplace=True),
-				# pw-linear
+				# 点卷积-线性
 				nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
 				nn.BatchNorm2d(oup),
 			)
 		else:
 			self.conv = nn.Sequential(
-				# pw
+				# 点卷积
 				nn.Conv2d(inp, hidden_dim, 1, 1, 0, bias=False),
 				nn.BatchNorm2d(hidden_dim),
 				nn.ReLU6(inplace=True),
-				# dw
+				# 深度卷积
 				nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, dilation=dilation, bias=False),
 				nn.BatchNorm2d(hidden_dim),
 				nn.ReLU6(inplace=True),
-				# pw-linear
+				# 点卷积-线性
 				nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
 				nn.BatchNorm2d(oup),
 			)
@@ -84,7 +84,7 @@ class InvertedResidual(nn.Module):
 
 
 #------------------------------------------------------------------------------
-#  Class of MobileNetV2
+#  MobileNetV2类
 #------------------------------------------------------------------------------
 
 class MobileNetV2(nn.Module):
@@ -105,12 +105,12 @@ class MobileNetV2(nn.Module):
 			[expansion, 320, 1, 1],
 		]
 
-		# building first layer
+		# 构建第一层
 		input_channel = _make_divisible(input_channel*alpha, 8)
 		self.last_channel = _make_divisible(last_channel*alpha, 8) if alpha > 1.0 else last_channel
 		self.features = [conv_bn(self.in_channels, input_channel, 2)]
 
-		# building inverted residual blocks
+		# 构建倒残差块
 		for t, c, n, s in interverted_residual_setting:
 			output_channel = _make_divisible(int(c*alpha), 8)
 			for i in range(n):
@@ -120,34 +120,34 @@ class MobileNetV2(nn.Module):
 					self.features.append(InvertedResidual(input_channel, output_channel, 1, expansion=t))
 				input_channel = output_channel
 
-		# building last several layers
+		# 构建最后几层
 		self.features.append(conv_1x1_bn(input_channel, self.last_channel))
 
-		# make it nn.Sequential
+		# 使其成为nn.Sequential
 		self.features = nn.Sequential(*self.features)
 
-		# building classifier
+		# 构建分类器
 		if self.num_classes is not None:
 			self.classifier = nn.Sequential(
 				nn.Dropout(0.2),
 				nn.Linear(self.last_channel, num_classes),
 			)
 
-		# Initialize weights
+		# 初始化权重
 		self._init_weights()
 
 	def forward(self, x):
-		# Stage1
+		# 阶段1
 		x = self.features[0](x)
 		x = self.features[1](x)
-		# Stage2
+		# 阶段2
 		x = self.features[2](x)
 		x = self.features[3](x)
-		# Stage3
+		# 阶段3
 		x = self.features[4](x)
 		x = self.features[5](x)
 		x = self.features[6](x)
-		# Stage4
+		# 阶段4
 		x = self.features[7](x)
 		x = self.features[8](x)
 		x = self.features[9](x)
@@ -155,31 +155,31 @@ class MobileNetV2(nn.Module):
 		x = self.features[11](x)
 		x = self.features[12](x)
 		x = self.features[13](x)
-		# Stage5
+		# 阶段5
 		x = self.features[14](x)
 		x = self.features[15](x)
 		x = self.features[16](x)
 		x = self.features[17](x)
 		x = self.features[18](x)
 
-		# Classification
+		# 分类
 		if self.num_classes is not None:
 			x = x.mean(dim=(2,3))
 			x = self.classifier(x)
 			
-		# Output
+		# 输出
 		return x
 
 	def _load_pretrained_model(self, pretrained_file):
 		pretrain_dict = torch.load(pretrained_file, map_location='cpu')
 		model_dict = {}
 		state_dict = self.state_dict()
-		print("[MobileNetV2] Loading pretrained model...")
+		print("[MobileNetV2] 加载预训练模型...")
 		for k, v in pretrain_dict.items():
 			if k in state_dict:
 				model_dict[k] = v
 			else:
-				print(k, "is ignored")
+				print(k, "被忽略")
 		state_dict.update(model_dict)
 		self.load_state_dict(state_dict)
 

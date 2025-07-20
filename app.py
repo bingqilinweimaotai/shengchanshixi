@@ -100,12 +100,21 @@ def preprocess_image_for_modnet(image_path, ref_size=512):
         if im.mode != 'RGB':
             im = im.convert('RGB')
 
-        # resize 保持比例 + 裁剪成32的倍数
-        im_size = im.size
-        ratio = min(ref_size / max(im_size), 1.0)
-        new_size = tuple([int(x * ratio) for x in im_size])
-        new_size = (new_size[0] // 32 * 32, new_size[1] // 32 * 32)  # 裁剪到32的倍数
-
+        # 获取原始尺寸
+        original_size = im.size
+        
+        # 计算缩放比例，保持宽高比
+        ratio = min(ref_size / max(original_size), 1.0)
+        new_size = tuple([int(x * ratio) for x in original_size])
+        
+        # 确保尺寸是32的倍数
+        new_size = (new_size[0] // 32 * 32, new_size[1] // 32 * 32)
+        
+        # 确保最小尺寸
+        if new_size[0] < 32 or new_size[1] < 32:
+            new_size = (32, 32)
+        
+        # 调整图像尺寸
         im = im.resize(new_size, LANCZOS)
 
         transform = transforms.Compose([
@@ -113,7 +122,7 @@ def preprocess_image_for_modnet(image_path, ref_size=512):
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
 
-        return transform(im).unsqueeze(0), new_size
+        return transform(im).unsqueeze(0), original_size  # 返回原始尺寸而不是处理后的尺寸
     except Exception as e:
         print(f"图像预处理失败: {e}")
         return None, None
@@ -126,8 +135,12 @@ def modnet_remove_background(image_path):
         return None
     
     try:
+        # 加载原始图像以获取真实尺寸
+        original_img = Image.open(image_path).convert('RGB')
+        original_size = original_img.size
+        
         # 预处理图像
-        im_tensor, im_size = preprocess_image_for_modnet(image_path)
+        im_tensor, processed_size = preprocess_image_for_modnet(image_path)
         if im_tensor is None:
             return None
         
@@ -139,18 +152,34 @@ def modnet_remove_background(image_path):
         matte = matte[0][0].data.cpu().numpy()
         matte = np.clip(matte, 0, 1)
         
-        # 调整回原始尺寸
-        matte_resized = Image.fromarray((matte * 255).astype(np.uint8)).resize(im_size, LANCZOS)
+        # 将matte转换为PIL图像并调整到处理尺寸
+        matte_pil = Image.fromarray((matte * 255).astype(np.uint8))
+        
+        # 调整到原始图像尺寸
+        matte_resized = matte_pil.resize(original_size, LANCZOS)
         matte_np = np.array(matte_resized) / 255.0
         
-        # 加载原始图像
-        original_img = Image.open(image_path).convert('RGB')
-        original_np = np.array(original_img)
+        # 确保matte_np的尺寸与原始图像匹配
+        if matte_np.shape[:2] != original_size[::-1]:  # PIL的size是(w,h)，numpy是(h,w)
+            print(f"尺寸不匹配警告: matte_np {matte_np.shape}, original_size {original_size}")
+            # 强制调整尺寸
+            matte_resized = matte_pil.resize(original_size, LANCZOS)
+            matte_np = np.array(matte_resized) / 255.0
         
         # 创建RGBA图像
+        original_np = np.array(original_img)
         rgba_img = np.zeros((original_np.shape[0], original_np.shape[1], 4), dtype=np.uint8)
         rgba_img[:, :, :3] = original_np  # RGB通道
-        rgba_img[:, :, 3] = (matte_np * 255).astype(np.uint8)  # Alpha通道
+        
+        # 确保Alpha通道尺寸匹配
+        if matte_np.shape[:2] == rgba_img.shape[:2]:
+            rgba_img[:, :, 3] = (matte_np * 255).astype(np.uint8)  # Alpha通道
+        else:
+            print(f"Alpha通道尺寸不匹配: matte_np {matte_np.shape}, rgba_img {rgba_img.shape}")
+            # 如果尺寸不匹配，使用简单的阈值处理作为备选
+            gray = cv2.cvtColor(original_np, cv2.COLOR_RGB2GRAY)
+            _, alpha = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY_INV)
+            rgba_img[:, :, 3] = alpha
         
         # 转换为PIL图像
         result_img = Image.fromarray(rgba_img, 'RGBA')
@@ -164,21 +193,28 @@ def remove_background(image_path):
     """移除背景的统一接口"""
     # 优先使用MODNet
     if MODNET_AVAILABLE:
+        print(f"尝试使用MODNet处理图像: {image_path}")
         result = modnet_remove_background(image_path)
         if result is not None:
+            print("MODNet处理成功")
             return result
         print("MODNet处理失败，回退到rembg")
+    else:
+        print("MODNet不可用，直接使用rembg")
     
     # 备选方案：使用rembg
     try:
+        print(f"使用rembg处理图像: {image_path}")
         with open(image_path, 'rb') as f:
             input_data = f.read()
         output_data = remove(input_data)
         # 修复类型兼容性问题
         if isinstance(output_data, bytes):
-            return Image.open(io.BytesIO(output_data)).convert('RGBA')
+            result = Image.open(io.BytesIO(output_data)).convert('RGBA')
         else:
-            return output_data
+            result = output_data
+        print("rembg处理成功")
+        return result
     except Exception as e:
         print(f"rembg处理也失败: {e}")
         return None

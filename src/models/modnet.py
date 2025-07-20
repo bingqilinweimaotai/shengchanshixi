@@ -6,11 +6,11 @@ from .backbones import SUPPORTED_BACKBONES
 
 
 #------------------------------------------------------------------------------
-#  MODNet Basic Modules
+#  MODNet 基础模块
 #------------------------------------------------------------------------------
 
 class IBNorm(nn.Module):
-    """ Combine Instance Norm and Batch Norm into One Layer
+    """ 将实例归一化和批归一化结合到一个层中
     """
 
     def __init__(self, in_channels):
@@ -30,7 +30,7 @@ class IBNorm(nn.Module):
 
 
 class Conv2dIBNormRelu(nn.Module):
-    """ Convolution + IBNorm + ReLu
+    """ 卷积 + IBNorm + ReLu
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, 
@@ -56,7 +56,7 @@ class Conv2dIBNormRelu(nn.Module):
 
 
 class SEBlock(nn.Module):
-    """ SE Block Proposed in https://arxiv.org/pdf/1709.01507.pdf 
+    """ SE块，提出于 https://arxiv.org/pdf/1709.01507.pdf 
     """
 
     def __init__(self, in_channels, out_channels, reduction=1):
@@ -78,11 +78,11 @@ class SEBlock(nn.Module):
 
 
 #------------------------------------------------------------------------------
-#  MODNet Branches
+#  MODNet 分支
 #------------------------------------------------------------------------------
 
 class LRBranch(nn.Module):
-    """ Low Resolution Branch of MODNet
+    """ MODNet的低分辨率分支
     """
 
     def __init__(self, backbone):
@@ -115,7 +115,7 @@ class LRBranch(nn.Module):
 
 
 class HRBranch(nn.Module):
-    """ High Resolution Branch of MODNet
+    """ MODNet的高分辨率分支
     """
 
     def __init__(self, hr_channels, enc_channels):
@@ -171,7 +171,7 @@ class HRBranch(nn.Module):
 
 
 class FusionBranch(nn.Module):
-    """ Fusion Branch of MODNet
+    """ MODNet的融合分支
     """
 
     def __init__(self, hr_channels, enc_channels):
@@ -198,58 +198,68 @@ class FusionBranch(nn.Module):
 
 
 #------------------------------------------------------------------------------
-#  MODNet
+#  MODNet 主网络
 #------------------------------------------------------------------------------
 
 class MODNet(nn.Module):
-    """ Architecture of MODNet
+    """ MODNet主网络
     """
 
     def __init__(self, in_channels=3, hr_channels=32, backbone_arch='mobilenetv2', backbone_pretrained=True):
         super(MODNet, self).__init__()
 
-        self.in_channels = in_channels
-        self.hr_channels = hr_channels
         self.backbone_arch = backbone_arch
         self.backbone_pretrained = backbone_pretrained
+        self.in_channels = in_channels
+        self.hr_channels = hr_channels
 
-        self.backbone = SUPPORTED_BACKBONES[self.backbone_arch](self.in_channels)
-
+        self.backbone = SUPPORTED_BACKBONES[backbone_arch](backbone_pretrained)
+        
         self.lr_branch = LRBranch(self.backbone)
         self.hr_branch = HRBranch(self.hr_channels, self.backbone.enc_channels)
         self.f_branch = FusionBranch(self.hr_channels, self.backbone.enc_channels)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                self._init_conv(m)
-            elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.InstanceNorm2d):
-                self._init_norm(m)
-
-        if self.backbone_pretrained:
-            self.backbone.load_pretrained_ckpt()                
+        self._init_weights()
 
     def forward(self, img, inference):
         pred_semantic, lr8x, [enc2x, enc4x] = self.lr_branch(img, inference)
         pred_detail, hr2x = self.hr_branch(img, enc2x, enc4x, lr8x, inference)
         pred_matte = self.f_branch(img, lr8x, hr2x)
 
-        return pred_semantic, pred_detail, pred_matte
-    
+        if inference:
+            return pred_matte
+        else:
+            return pred_semantic, pred_detail, pred_matte
+
     def freeze_norm(self):
-        norm_types = [nn.BatchNorm2d, nn.InstanceNorm2d]
-        for m in self.modules():
-            for n in norm_types:
-                if isinstance(m, n):
-                    m.eval()
-                    continue
+        """ 冻结所有归一化层
+        """
+        for name, module in self.named_modules():
+            if isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d)):
+                module.eval()
+                module.weight.requires_grad = False
+                module.bias.requires_grad = False
+
+    def _init_weights(self):
+        """ 初始化网络权重
+        """
+        for name, module in self.named_modules():
+            if isinstance(module, (nn.Conv2d, nn.Linear)):
+                self._init_conv(module)
+            elif isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d)):
+                self._init_norm(module)
 
     def _init_conv(self, conv):
-        nn.init.kaiming_uniform_(
-            conv.weight, a=0, mode='fan_in', nonlinearity='relu')
+        """ 初始化卷积层
+        """
+        nn.init.kaiming_uniform_(conv.weight)
         if conv.bias is not None:
             nn.init.constant_(conv.bias, 0)
 
     def _init_norm(self, norm):
+        """ 初始化归一化层
+        """
         if norm.weight is not None:
             nn.init.constant_(norm.weight, 1)
+        if norm.bias is not None:
             nn.init.constant_(norm.bias, 0)
