@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>高级去水印 - 智能证件照处理工具</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        body { background-color: #f8f9fa; padding-top: 70px; font-family: "Helvetica Neue", Arial, sans-serif; }
+        .navbar { background-color: #fff; }
+        .navbar-brand { color: #4a90e2 !important; font-weight: 600; }
+        .navbar-nav .nav-link.active { color: #4a90e2 !important; font-weight: 500; }
+        .btn-custom { background-color: #4a90e2; color: #fff; border: none; border-radius: 30px; transition: background-color 0.3s; }
+        .btn-custom:hover { background-color: #3f7ec7; }
+        .card { margin: 0 auto; max-width: 1200px; border: none; border-radius: 1rem; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1); }
+        .canvas-container { min-height: 400px; border: 2px dashed #ccc; border-radius: 0.5rem; padding: 1rem; display: flex; align-items: center; justify-content: center; overflow: auto; }
+        #canvas { max-width: 100%; border-radius: 0.5rem; }
+        .info-box { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; margin-bottom: 1rem; border-radius: 0.5rem; }
+        .tool-panel { background-color: #f8f9fa; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; }
+        .brush-size { display: flex; align-items: center; gap: 10px; }
+        .brush-size input { width: 100px; }
+        .quality-info { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 0.5rem; margin-bottom: 1rem; border-radius: 0.5rem; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-light shadow-sm fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="/">智能证件照处理工具</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                <li class="nav-item"><a class="nav-link" href="/background">换背景</a></li>
+                <li class="nav-item"><a class="nav-link" href="/crop">裁剪</a></li>
+                <li class="nav-item"><a class="nav-link" href="/watermark">加水印</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/remove_watermark_advanced">去水印</a></li>
+                <li class="nav-item"><a class="nav-link" href="/portrait_cutout">人像抠图</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-5">
+    <div class="card p-4">
+        <h2 class="text-center mb-4">高级去水印工具</h2>
+        
+        <div class="info-box">
+            <h6><i class="fas fa-info-circle"></i> 功能说明</h6>
+            <p class="mb-2">上传图片后，使用画笔工具手动标注要去除的水印区域，然后点击处理按钮。</p>
+            <ul class="text-muted mb-0">
+                <li>支持精确标注水印区域</li>
+                <li>使用先进的图像修复算法</li>
+                <li>处理效果更自然</li>
+            </ul>
+        </div>
+        
+        <div class="quality-info">
+            <i class="fas fa-star"></i> <strong>高品质处理</strong>：系统将保持原图尺寸和质量，确保处理后的图片不会压缩。
+        </div>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="mb-3">
+                    <label for="imageInput" class="form-label fw-bold">上传图片</label>
+                    <input type="file" id="imageInput" class="form-control" accept="image/*" />
+                </div>
+                <div class="canvas-container">
+                    <canvas id="canvas"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="tool-panel">
+                    <h6><i class="fas fa-paint-brush"></i> 画笔工具</h6>
+                    <div class="brush-size mb-3">
+                        <label>画笔大小:</label>
+                        <input type="range" id="brushSize" min="5" max="50" value="20" class="form-range" />
+                        <span id="brushSizeValue">20</span>
+                    </div>
+                    <div class="mb-3">
+                        <button id="brushBtn" class="btn btn-custom btn-sm me-2">画笔</button>
+                        <button id="eraserBtn" class="btn btn-outline-secondary btn-sm">橡皮擦</button>
+                    </div>
+                    <div class="mb-3">
+                        <button id="clearBtn" class="btn btn-warning btn-sm">清除标注</button>
+                        <button id="undoBtn" class="btn btn-outline-secondary btn-sm">撤销</button>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <button id="processBtn" class="btn btn-custom w-100" disabled>处理图片</button>
+                </div>
+                
+                <div id="resultSection" style="display: none;">
+                    <h6>处理结果</h6>
+                    <img id="resultImg" class="img-fluid mb-3" />
+                    <a id="downloadBtn" class="btn btn-success w-100" download="去水印图片.png">
+                        <i class="fas fa-download"></i> 下载结果
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+<script>
+let canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
+let isDrawing = false;
+let isEraser = false;
+let brushSize = 20;
+let image = null;
+let originalImage = null; // 保存原始图片对象
+let maskCanvas = document.createElement('canvas');
+let maskCtx = maskCanvas.getContext('2d');
+
+// 初始化
+function initCanvas() {
+    canvas.width = 800;
+    canvas.height = 600;
+    maskCanvas.width = canvas.width;
+    maskCanvas.height = canvas.height;
+    maskCtx.fillStyle = 'black';
+    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+}
+
+// 加载图片
+document.getElementById('imageInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            image = new Image();
+            image.onload = function() {
+                // 保存原始图片对象
+                originalImage = image;
+                
+                // 调整画布大小以适应图片，但保持合理尺寸
+                const maxWidth = 1200;  // 增加最大宽度
+                const maxHeight = 800;  // 增加最大高度
+                let { width, height } = image;
+                
+                // 计算缩放比例，但保持原图比例
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width = Math.floor(width * ratio);
+                    height = Math.floor(height * ratio);
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                maskCanvas.width = width;
+                maskCanvas.height = height;
+                
+                // 绘制图片
+                ctx.drawImage(image, 0, 0, width, height);
+                
+                // 初始化mask
+                maskCtx.fillStyle = 'black';
+                maskCtx.fillRect(0, 0, width, height);
+                
+                document.getElementById('processBtn').disabled = false;
+            };
+            image.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// 画笔大小控制
+document.getElementById('brushSize').addEventListener('input', function(e) {
+    brushSize = parseInt(e.target.value);
+    document.getElementById('brushSizeValue').textContent = brushSize;
+});
+
+// 工具切换
+document.getElementById('brushBtn').addEventListener('click', function() {
+    isEraser = false;
+    this.classList.add('btn-custom');
+    this.classList.remove('btn-outline-secondary');
+    document.getElementById('eraserBtn').classList.remove('btn-custom');
+    document.getElementById('eraserBtn').classList.add('btn-outline-secondary');
+});
+
+document.getElementById('eraserBtn').addEventListener('click', function() {
+    isEraser = true;
+    this.classList.add('btn-custom');
+    this.classList.remove('btn-outline-secondary');
+    document.getElementById('brushBtn').classList.remove('btn-custom');
+    document.getElementById('brushBtn').classList.add('btn-outline-secondary');
+});
+
+// 鼠标事件
+canvas.addEventListener('mousedown', startDrawing);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDrawing);
+canvas.addEventListener('mouseout', stopDrawing);
+
+function startDrawing(e) {
+    isDrawing = true;
+    draw(e);
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    
+    // 同时更新mask
+    maskCtx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    maskCtx.lineWidth = brushSize;
+    maskCtx.lineCap = 'round';
+    maskCtx.lineJoin = 'round';
+    maskCtx.strokeStyle = 'white';
+    maskCtx.lineTo(x, y);
+    maskCtx.stroke();
+    maskCtx.beginPath();
+    maskCtx.moveTo(x, y);
+}
+
+function stopDrawing() {
+    isDrawing = false;
+    ctx.beginPath();
+    maskCtx.beginPath();
+}
+
+// 清除标注
+document.getElementById('clearBtn').addEventListener('click', function() {
+    if (originalImage) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+        
+        maskCtx.fillStyle = 'black';
+        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+    }
+});
+
+// 处理图片 - 使用高质量参数
+document.getElementById('processBtn').addEventListener('click', function() {
+    if (!originalImage) return;
+    
+    // 创建FormData
+    const formData = new FormData();
+    
+    // 创建高质量的原图blob
+    const originalCanvas = document.createElement('canvas');
+    const originalCtx = originalCanvas.getContext('2d');
+    originalCanvas.width = originalImage.naturalWidth;
+    originalCanvas.height = originalImage.naturalHeight;
+    originalCtx.drawImage(originalImage, 0, 0);
+    
+    // 使用高质量参数创建原图blob
+    originalCanvas.toBlob(function(blob) {
+        formData.append('file', blob, 'image.png');
+        
+        // 创建高质量的mask blob
+        const maskCanvasFull = document.createElement('canvas');
+        const maskCtxFull = maskCanvasFull.getContext('2d');
+        maskCanvasFull.width = originalImage.naturalWidth;
+        maskCanvasFull.height = originalImage.naturalHeight;
+        
+        // 将mask缩放到原图尺寸
+        maskCtxFull.drawImage(maskCanvas, 0, 0, maskCanvasFull.width, maskCanvasFull.height);
+        
+        // 使用高质量参数创建mask blob
+        maskCanvasFull.toBlob(function(maskBlob) {
+            formData.append('mask', maskBlob, 'mask.png');
+            
+            // 显示处理中状态
+            const processBtn = document.getElementById('processBtn');
+            const originalText = processBtn.innerHTML;
+            processBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
+            processBtn.disabled = true;
+            
+            // 发送请求
+            fetch('/remove_watermark_advanced', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('处理失败');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                document.getElementById('resultImg').src = url;
+                document.getElementById('downloadBtn').href = url;
+                document.getElementById('resultSection').style.display = 'block';
+                
+                // 恢复按钮状态
+                processBtn.innerHTML = originalText;
+                processBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('处理失败，请重试');
+                
+                // 恢复按钮状态
+                processBtn.innerHTML = originalText;
+                processBtn.disabled = false;
+            });
+        }, 'image/png', 1.0); // 最高质量
+    }, 'image/png', 1.0); // 最高质量
+});
+
+// 初始化
+initCanvas();
+</script>
+</body>
+</html> 

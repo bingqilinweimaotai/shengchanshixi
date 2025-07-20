@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>人像抠图 - 智能证件照处理工具</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link
+      href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --brand-color: #4a90e2;
+      }
+
+      body {
+        background-color: #f8f9fa;
+        padding-top: 70px;
+        font-family: "Helvetica Neue", Arial, sans-serif;
+      }
+
+      .navbar {
+        background-color: #fff;
+      }
+
+      .navbar-brand {
+        color: var(--brand-color) !important;
+        font-weight: 600;
+      }
+
+      .navbar-nav .nav-link.active {
+        color: var(--brand-color) !important;
+        font-weight: 500;
+      }
+
+      .btn-custom {
+        background-color: var(--brand-color);
+        color: #fff;
+        border: none;
+        border-radius: 30px;
+        transition: background-color 0.3s;
+      }
+
+      .btn-custom:hover {
+        background-color: #3f7ec7;
+      }
+
+      .card {
+        margin: 0 auto;
+        max-width: 900px;
+        border: none;
+        border-radius: 1rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+      }
+
+      h1,
+      h2 {
+        font-weight: 700;
+      }
+
+      img {
+        max-width: 100%;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+      }
+
+      .error {
+        color: #dc3545;
+        font-weight: 600;
+      }
+
+      .button-center-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: row;
+        margin-top: 40px;
+      }
+
+      .button-center-wrapper .btn {
+        margin: 0 12px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-light shadow-sm fixed-top">
+      <div class="container">
+        <a class="navbar-brand" href="/">智能证件照处理工具</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="切换导航"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                <li class="nav-item"><a class="nav-link" href="/background">换背景</a></li>
+                <li class="nav-item"><a class="nav-link" href="/crop">裁剪</a></li>
+                <li class="nav-item"><a class="nav-link" href="/watermark">加水印</a></li>
+                <li class="nav-item"><a class="nav-link" href="/remove_watermark_advanced">去水印</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/portrait_cutout">人像抠图</a></li>
+            </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container mt-5 mb-5">
+      <div class="card p-4">
+        <h1 class="text-center mb-4">人像抠图（去背景）</h1>
+
+        <form
+          method="post"
+          enctype="multipart/form-data"
+          class="mb-4 text-center"
+        >
+          <input
+            type="file"
+            name="file"
+            accept="image/*"
+            required
+            class="form-control d-inline-block"
+            style="max-width: 350px"
+          />
+          <button type="submit" class="btn btn-custom px-4 ms-2">
+            上传并抠图
+          </button>
+        </form>
+
+        {% if error %}
+        <p class="error text-center mb-3">{{ error }}</p>
+        {% endif %}
+
+        {% if original_img or cutout_img %}
+        <div class="row text-center">
+          {% if original_img %}
+          <div class="col-md-6 mb-4 mb-md-0">
+            <h2>原图</h2>
+            <img src="{{ original_img }}" alt="原图" />
+          </div>
+          {% endif %}
+          {% if cutout_img %}
+          <div class="col-md-6">
+            <h2>抠图结果（带透明背景）</h2>
+            <img src="{{ cutout_img }}" alt="抠图结果" />
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="button-center-wrapper">
+          <a href="/portrait_cutout" class="btn btn-outline-secondary">重新选择图片</a>
+          <a href="{{ cutout_img }}" download="cutout.png" class="btn btn-custom">下载图片</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
